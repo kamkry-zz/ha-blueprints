@@ -1,0 +1,74 @@
+blueprint:
+  name: Ensure LocalTuya Switch State By Time Window
+  description: Keep a LocalTuya switch on during a configured time window and off outside of it.
+  domain: automation
+  input:
+    localtuya_switch:
+      name: LocalTuya Switch
+      description: Switch entity from the LocalTuya integration.
+      selector:
+        entity:
+          domain: switch
+          integration: localtuya
+    start_time:
+      name: Start Time
+      description: Time when the switch should start being forced to ON.
+      selector:
+        time: {}
+    end_time:
+      name: End Time
+      description: Time when the switch should start being forced to OFF.
+      selector:
+        time: {}
+
+variables:
+  localtuya_switch: !input localtuya_switch
+  start_time: !input start_time
+  end_time: !input end_time
+
+trigger:
+  # Enforce state at startup and exact schedule boundaries.
+  - platform: homeassistant
+    event: start
+  - platform: time
+    at: !input start_time
+  - platform: time
+    at: !input end_time
+
+  # Re-apply policy after manual toggles or external changes.
+  - platform: state
+    entity_id: !input localtuya_switch
+
+  # Safety net in case a state change is missed.
+  - platform: time_pattern
+    minutes: "/1"
+
+action:
+  - variables:
+      in_window: >
+        {% set now_t = now().strftime('%H:%M:%S') %}
+        {% if start_time <= end_time %}
+          {{ start_time <= now_t < end_time }}
+        {% else %}
+          {{ now_t >= start_time or now_t < end_time }}
+        {% endif %}
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ in_window and states(localtuya_switch) != 'on' }}"
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input localtuya_switch
+
+      - conditions:
+          - condition: template
+            value_template: "{{ (not in_window) and states(localtuya_switch) != 'off' }}"
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input localtuya_switch
+
+mode: single
+max_exceeded: silent

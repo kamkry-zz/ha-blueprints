@@ -1,0 +1,176 @@
+blueprint:
+  name: Turn On Entity By Multiple Timeframes
+  description: >
+    Turns ON a selected entity on a minute schedule that can differ per timeframe.
+    Supports up to 3 timeframes. Set how many are active with "Number of Active Timeframes"
+    and configure each timeframe's start, end, and interval in minutes.
+  domain: automation
+  input:
+    target_entity:
+      name: Target Entity
+      description: Entity that should be turned on on schedule.
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+            - fan
+            - input_boolean
+
+    timeframe_count:
+      name: Number of Active Timeframes
+      description: Use the first N timeframes below.
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 3
+          step: 1
+          mode: box
+
+    tf1_enabled:
+      name: Timeframe 1 Enabled
+      default: true
+      selector:
+        boolean: {}
+    tf1_start:
+      name: Timeframe 1 Start
+      default: "06:00:00"
+      selector:
+        time: {}
+    tf1_end:
+      name: Timeframe 1 End
+      default: "22:00:00"
+      selector:
+        time: {}
+    tf1_interval:
+      name: Timeframe 1 Interval (minutes)
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          mode: box
+
+    tf2_enabled:
+      name: Timeframe 2 Enabled
+      default: true
+      selector:
+        boolean: {}
+    tf2_start:
+      name: Timeframe 2 Start
+      default: "22:00:00"
+      selector:
+        time: {}
+    tf2_end:
+      name: Timeframe 2 End
+      default: "06:00:00"
+      selector:
+        time: {}
+    tf2_interval:
+      name: Timeframe 2 Interval (minutes)
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          mode: box
+
+    tf3_enabled:
+      name: Timeframe 3 Enabled
+      default: false
+      selector:
+        boolean: {}
+    tf3_start:
+      name: Timeframe 3 Start
+      default: "00:00:00"
+      selector:
+        time: {}
+    tf3_end:
+      name: Timeframe 3 End
+      default: "00:00:00"
+      selector:
+        time: {}
+    tf3_interval:
+      name: Timeframe 3 Interval (minutes)
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          mode: box
+
+variables:
+  target_entity: !input target_entity
+  timeframe_count: !input timeframe_count
+
+  tf1_enabled: !input tf1_enabled
+  tf1_start: !input tf1_start
+  tf1_end: !input tf1_end
+  tf1_interval: !input tf1_interval
+
+  tf2_enabled: !input tf2_enabled
+  tf2_start: !input tf2_start
+  tf2_end: !input tf2_end
+  tf2_interval: !input tf2_interval
+
+  tf3_enabled: !input tf3_enabled
+  tf3_start: !input tf3_start
+  tf3_end: !input tf3_end
+  tf3_interval: !input tf3_interval
+
+trigger:
+  - platform: homeassistant
+    event: start
+  - platform: time_pattern
+    minutes: "/1"
+
+condition:
+  - condition: template
+    value_template: >
+      {% set windows = [
+        {'enabled': tf1_enabled, 'start': tf1_start, 'end': tf1_end, 'interval': tf1_interval|int},
+        {'enabled': tf2_enabled, 'start': tf2_start, 'end': tf2_end, 'interval': tf2_interval|int},
+        {'enabled': tf3_enabled, 'start': tf3_start, 'end': tf3_end, 'interval': tf3_interval|int}
+      ] %}
+      {% set now_m = now().hour * 60 + now().minute %}
+      {% set ns = namespace(run=false) %}
+
+      {% for w in windows %}
+        {% if loop.index <= timeframe_count|int and (w.enabled | bool) and (w.interval | int > 0) %}
+          {% set s = w.start.split(':') %}
+          {% set e = w.end.split(':') %}
+          {% set start_m = (s[0] | int) * 60 + (s[1] | int) %}
+          {% set end_m = (e[0] | int) * 60 + (e[1] | int) %}
+
+          {% set now_n = now_m %}
+          {% set end_n = end_m %}
+
+          {% if end_m <= start_m %}
+            {% set end_n = end_m + 1440 %}
+            {% if now_n < start_m %}
+              {% set now_n = now_n + 1440 %}
+            {% endif %}
+          {% endif %}
+
+          {% set in_window = start_m <= now_n < end_n %}
+          {% set elapsed = now_n - start_m %}
+
+          {% if in_window and (elapsed % (w.interval | int) == 0) %}
+            {% set ns.run = true %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {{ ns.run }}
+
+action:
+  - service: homeassistant.turn_on
+    target:
+      entity_id: !input target_entity
+
+mode: single
+max_exceeded: silent

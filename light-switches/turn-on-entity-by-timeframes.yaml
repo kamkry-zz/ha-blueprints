@@ -4,6 +4,7 @@ blueprint:
     Turns ON a selected entity on a minute schedule that can differ per timeframe.
     Supports up to 3 timeframes. Set how many are active with "Number of Active Timeframes"
     and configure each timeframe's start, end, and interval in minutes.
+    Optionally auto-turn OFF after Runtime Minutes.
   domain: automation
   input:
     target_entity:
@@ -16,6 +17,17 @@ blueprint:
             - light
             - fan
             - input_boolean
+
+    runtime_minutes:
+      name: Runtime Minutes
+      description: Minutes to keep the entity ON after each trigger. Set 0 to keep ON.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 240
+          step: 1
+          mode: box
 
     timeframe_count:
       name: Number of Active Timeframes
@@ -105,6 +117,7 @@ blueprint:
 
 variables:
   target_entity: !input target_entity
+  runtime_minutes: !input runtime_minutes
   timeframe_count: !input timeframe_count
 
   tf1_enabled: !input tf1_enabled
@@ -171,6 +184,16 @@ action:
   - service: homeassistant.turn_on
     target:
       entity_id: !input target_entity
+
+  - if:
+      - condition: template
+        value_template: "{{ runtime_minutes | int > 0 }}"
+    then:
+      - delay:
+          minutes: !input runtime_minutes
+      - service: homeassistant.turn_off
+        target:
+          entity_id: !input target_entity
 
 mode: single
 max_exceeded: silent

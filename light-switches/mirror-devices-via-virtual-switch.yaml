@@ -74,9 +74,6 @@ triggers:
       - "on"
       - "off"
     id: device_b
-  - trigger: time_pattern
-    minutes: "/1"
-    id: reconcile
 
 actions:
   - choose:
@@ -152,49 +149,6 @@ actions:
               - action: input_boolean.turn_off
                 target:
                   entity_id: !input virtual_switch
-
-      # Reconciliation: re-apply the virtual state until the devices follow.
-      - conditions:
-          - condition: trigger
-            id: reconcile
-        sequence:
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ states(virtual_switch) == 'on' }}"
-                sequence:
-                  - if:
-                      - condition: template
-                        value_template: "{{ is_state(device_a, 'off') }}"
-                    then:
-                      - action: homeassistant.turn_on
-                        target:
-                          entity_id: !input device_a
-                  - if:
-                      - condition: template
-                        value_template: "{{ is_state(device_b, 'off') }}"
-                    then:
-                      - action: homeassistant.turn_on
-                        target:
-                          entity_id: !input device_b
-              - conditions:
-                  - condition: template
-                    value_template: "{{ states(virtual_switch) == 'off' }}"
-                sequence:
-                  - if:
-                      - condition: template
-                        value_template: "{{ is_state(device_a, 'on') }}"
-                    then:
-                      - action: homeassistant.turn_off
-                        target:
-                          entity_id: !input device_a
-                  - if:
-                      - condition: template
-                        value_template: "{{ is_state(device_b, 'on') }}"
-                    then:
-                      - action: homeassistant.turn_off
-                        target:
-                          entity_id: !input device_b
 
 mode: parallel
 max: 20

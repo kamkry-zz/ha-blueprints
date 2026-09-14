@@ -14,11 +14,13 @@ flaky local Tuya devices:
 - **No reconnect flips** – `unavailable -> on/off` transitions are ignored
   (`from: [on, off]`), which is what caused lamps to come back on 20-30 s after
   being switched off.
-- **Stale-report guard** – a report that contradicts the virtual helper within
-  `grace_seconds` (default 5 s) after it last changed is treated as a stale echo
-  and dropped. Set `grace_seconds: 0` to disable.
+- **Stale-report guard (off by default)** – an optional report filter that drops
+  contradicting reports within `grace_seconds` (default 0, disabled) after the
+  virtual helper last changed. LocalTuya does not set state optimistically, so
+  command echoes do not produce state changes; enabling this mainly delays
+  legitimate rapid presses.
 - **Debounce** – device changes must stay stable for `settle_seconds`
-  (default 3 s) before they are accepted.
+  (default 0.5 s) before they are accepted.
 - **Reconciliation** – every minute the virtual state is re-applied to any
   available device that diverged, so commands lost to network drops are retried
   until the relay follows.
@@ -31,8 +33,8 @@ One helper and one automation per pair.
 |---|---|---|
 | `virtual_switch` | `input_boolean` acting as the source of truth | – |
 | `device_a` / `device_b` | The two physical `switch`/`light` entities | – |
-| `settle_seconds` | Debounce before a device change is accepted | 3 |
-| `grace_seconds` | Window in which contradicting reports are treated as stale | 5 |
+| `settle_seconds` | Debounce before a device change is accepted | 0.5 |
+| `grace_seconds` | Window in which contradicting reports are treated as stale (0 = off) | 0 |
 
 ### Pairs in this house
 

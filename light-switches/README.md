@@ -11,12 +11,14 @@ flaky local Tuya devices:
 - **Dashboard control** – toggling the virtual helper drives both devices.
 - **Physical control** – changing either device (wall gang or smart plug) updates
   the virtual helper, so the last real change always wins.
-- **Reconnect handling** – reports that arrive after a device was
-  `unavailable`/`unknown` are accepted when the virtual helper was last changed
-  *before* the device went offline (a physical press during the outage). They are
-  ignored when the virtual was changed *while* the device was offline (the
-  command may have been lost), so the original "lamp comes back on 20-30 s later"
-  flip cannot happen. The reconciliation re-asserts the virtual in that case.
+- **No reconnect flips** – `unavailable -> on/off` transitions are ignored
+  (`from: [on, off]`), which is what caused lamps to come back on 20-30 s after
+  being switched off.
+- **Stale-report guard (off by default)** – an optional report filter that drops
+  contradicting reports within `grace_seconds` (default 0, disabled) after the
+  virtual helper last changed. LocalTuya does not set state optimistically, so
+  command echoes do not produce state changes; enabling this mainly delays
+  legitimate rapid presses.
 - **Debounce** – device changes must stay stable for `settle_seconds`
   (default 0.25 s) before they are accepted.
 - **Reconciliation** – every minute the virtual state is re-applied to any
@@ -32,6 +34,7 @@ One helper and one automation per pair.
 | `virtual_switch` | `input_boolean` acting as the source of truth | – |
 | `device_a` / `device_b` | The two physical `switch`/`light` entities | – |
 | `settle_seconds` | Debounce before a device change is accepted | 0.25 |
+| `grace_seconds` | Window in which contradicting reports are treated as stale (0 = off) | 0 |
 
 ### Pairs in this house
 

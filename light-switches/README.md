@@ -20,7 +20,7 @@ flaky local Tuya devices:
   command echoes do not produce state changes; enabling this mainly delays
   legitimate rapid presses.
 - **Debounce** – device changes must stay stable for `settle_seconds`
-  (default 0.5 s) before they are accepted.
+  (default 0.25 s) before they are accepted.
 - **Reconciliation** – every minute the virtual state is re-applied to any
   available device that diverged, so commands lost to network drops are retried
   until the relay follows.
@@ -33,7 +33,7 @@ One helper and one automation per pair.
 |---|---|---|
 | `virtual_switch` | `input_boolean` acting as the source of truth | – |
 | `device_a` / `device_b` | The two physical `switch`/`light` entities | – |
-| `settle_seconds` | Debounce before a device change is accepted | 0.5 |
+| `settle_seconds` | Debounce before a device change is accepted | 0.25 |
 | `grace_seconds` | Window in which contradicting reports are treated as stale (0 = off) | 0 |
 
 ### Pairs in this house

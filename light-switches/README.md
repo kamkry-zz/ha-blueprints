@@ -16,12 +16,14 @@ flaky local Tuya devices:
   *before* the device went offline (a physical press during the outage). They are
   ignored when the virtual was changed *while* the device was offline (the
   command may have been lost), so the original "lamp comes back on 20-30 s later"
-  flip cannot happen. The reconciliation re-asserts the virtual in that case.
+  flip cannot happen.
 - **Debounce** – device changes must stay stable for `settle_seconds`
   (default 0.25 s) before they are accepted.
-- **Reconciliation** – every minute the virtual state is re-applied to any
-  available device that diverged, so commands lost to network drops are retried
-  until the relay follows.
+
+There is intentionally **no periodic reconciliation**: with flaky devices it
+races fresh state reports and its commands can be delivered late (turning relays
+on minutes later). A lost command is resolved by the next user action or device
+report.
 
 One helper and one automation per pair.
 

@@ -1,0 +1,92 @@
+blueprint:
+  name: Mirror Tuya Switches
+  description: Mirror the state of two Tuya devices with only on/off functionality. When one device is turned on/off, the other will automatically follow.
+  domain: automation
+  input:
+    tuya_device_1:
+      name: Tuya Device 1
+      description: First Tuya device (switch or light)
+      selector:
+        entity:
+          domain: 
+            - switch
+            - light
+          
+    tuya_device_2:
+      name: Tuya Device 2
+      description: Second Tuya device (switch or light)
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+
+variables:
+  device_1: !input tuya_device_1
+  device_2: !input tuya_device_2
+      
+trigger:
+  # Device 1 turns on/off
+  - platform: state
+    entity_id: !input tuya_device_1
+    to: 'on'
+    id: 'device_1_on'
+  - platform: state
+    entity_id: !input tuya_device_1
+    to: 'off'
+    id: 'device_1_off'
+  # Device 2 turns on/off
+  - platform: state
+    entity_id: !input tuya_device_2
+    to: 'on'
+    id: 'device_2_on'
+  - platform: state
+    entity_id: !input tuya_device_2
+    to: 'off'
+    id: 'device_2_off'
+
+condition:
+  # Prevent infinite loops - only act if the target device is in a different state
+  - condition: template
+    value_template: >
+      {% if trigger.id in ['device_1_on', 'device_1_off'] %}
+        {{ states(device_2) != trigger.to_state.state }}
+      {% else %}
+        {{ states(device_1) != trigger.to_state.state }}
+      {% endif %}
+
+action:
+  - choose:
+      # Device 1 triggered - mirror to device 2
+      - conditions:
+          - condition: trigger
+            id: 'device_1_on'
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input tuya_device_2
+      - conditions:
+          - condition: trigger
+            id: 'device_1_off'
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input tuya_device_2
+      # Device 2 triggered - mirror to device 1
+      - conditions:
+          - condition: trigger
+            id: 'device_2_on'
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input tuya_device_1
+      - conditions:
+          - condition: trigger
+            id: 'device_2_off'
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input tuya_device_1
+
+mode: single
+max_exceeded: silent

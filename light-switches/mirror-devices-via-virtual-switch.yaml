@@ -1,0 +1,217 @@
+blueprint:
+  name: Mirror Devices via Virtual Switch
+  description: >
+    Keeps two switch/light entities in sync through a virtual input_boolean entity.
+    The virtual entity is the single source of truth: toggling it drives both
+    devices, and physical changes of either device update it. Reports caused by
+    network drops (unavailable -> on/off) are ignored, reports that contradict the
+    virtual switch within the grace window are treated as stale, and a periodic
+    reconciliation re-applies the virtual state until the devices follow.
+  domain: automation
+  author: kamkry-zz
+  source_url: https://github.com/kamkry-zz/ha-blueprints/blob/main/light-switches/mirror-devices-via-virtual-switch.yaml
+  input:
+    virtual_switch:
+      name: Virtual switch
+      description: >-
+        input_boolean used as the single source of truth for this pair. Create one
+        helper per pair (Settings > Devices & Services > Helpers).
+      selector:
+        entity:
+          domain:
+            - input_boolean
+    device_a:
+      name: Device A
+      description: First physical device of the pair (switch or light).
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+    device_b:
+      name: Device B
+      description: Second physical device of the pair (switch or light).
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+    settle_seconds:
+      name: Settle time (seconds)
+      description: >-
+        How long a device state must remain stable before it is accepted as a
+        change. Debounces flapping devices.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+          unit_of_measurement: seconds
+    grace_seconds:
+      name: Stale-report grace (seconds)
+      description: >-
+        Ignore reports that contradict the virtual switch within this many seconds
+        after the virtual switch last changed. Set 0 to disable.
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 300
+          step: 1
+          unit_of_measurement: seconds
+
+variables:
+  virtual_switch: !input virtual_switch
+  device_a: !input device_a
+  device_b: !input device_b
+  grace_seconds: !input grace_seconds
+
+triggers:
+  - trigger: state
+    entity_id: !input virtual_switch
+    to:
+      - "on"
+      - "off"
+    id: virtual
+  - trigger: state
+    entity_id: !input device_a
+    from:
+      - "on"
+      - "off"
+    to:
+      - "on"
+      - "off"
+    id: device_a
+  - trigger: state
+    entity_id: !input device_b
+    from:
+      - "on"
+      - "off"
+    to:
+      - "on"
+      - "off"
+    id: device_b
+  - trigger: time_pattern
+    minutes: "/1"
+    id: reconcile
+
+actions:
+  - choose:
+      # The virtual switch changed: drive both devices.
+      - conditions:
+          - condition: trigger
+            id: virtual
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ trigger.to_state.state == 'on' }}"
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state(device_a, 'off') }}"
+                    then:
+                      - action: homeassistant.turn_on
+                        target:
+                          entity_id: !input device_a
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state(device_b, 'off') }}"
+                    then:
+                      - action: homeassistant.turn_on
+                        target:
+                          entity_id: !input device_b
+            default:
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(device_a, 'on') }}"
+                then:
+                  - action: homeassistant.turn_off
+                    target:
+                      entity_id: !input device_a
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(device_b, 'on') }}"
+                then:
+                  - action: homeassistant.turn_off
+                    target:
+                      entity_id: !input device_b
+
+      # A physical device changed: update the virtual switch.
+      - conditions:
+          - condition: trigger
+            id:
+              - device_a
+              - device_b
+        sequence:
+          - delay: !input settle_seconds
+          - condition: template
+            value_template: "{{ states(trigger.entity_id) == trigger.to_state.state }}"
+          - condition: template
+            value_template: >-
+              {% set virtual = states(virtual_switch) %}
+              {% set reported = trigger.to_state.state %}
+              {% set automation_caused = trigger.to_state.context.parent_id is not none and trigger.to_state.context.user_id is none %}
+              {% set age = (now() - states[virtual_switch].last_changed).total_seconds() %}
+              {{ reported in ['on', 'off']
+                 and reported != virtual
+                 and (automation_caused or age >= grace_seconds) }}
+          - if:
+              - condition: template
+                value_template: "{{ trigger.to_state.state == 'on' }}"
+            then:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: !input virtual_switch
+            else:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: !input virtual_switch
+
+      # Reconciliation: re-apply the virtual state until the devices follow.
+      - conditions:
+          - condition: trigger
+            id: reconcile
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ states(virtual_switch) == 'on' }}"
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state(device_a, 'off') }}"
+                    then:
+                      - action: homeassistant.turn_on
+                        target:
+                          entity_id: !input device_a
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state(device_b, 'off') }}"
+                    then:
+                      - action: homeassistant.turn_on
+                        target:
+                          entity_id: !input device_b
+              - conditions:
+                  - condition: template
+                    value_template: "{{ states(virtual_switch) == 'off' }}"
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state(device_a, 'on') }}"
+                    then:
+                      - action: homeassistant.turn_off
+                        target:
+                          entity_id: !input device_a
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state(device_b, 'on') }}"
+                    then:
+                      - action: homeassistant.turn_off
+                        target:
+                          entity_id: !input device_b
+
+mode: parallel
+max: 20
+max_exceeded: silent

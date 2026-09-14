@@ -49,26 +49,11 @@ blueprint:
           max: 10
           step: 0.25
           unit_of_measurement: seconds
-    grace_seconds:
-      name: Stale-report grace (seconds)
-      description: >-
-        Ignore reports that contradict the virtual switch within this many seconds
-        after the virtual switch last changed. Default 0 disables the guard:
-        LocalTuya does not set state optimistically, so command echoes do not
-        produce state changes and the guard only delays legitimate presses.
-      default: 0
-      selector:
-        number:
-          min: 0
-          max: 300
-          step: 1
-          unit_of_measurement: seconds
 
 variables:
   virtual_switch: !input virtual_switch
   device_a: !input device_a
   device_b: !input device_b
-  grace_seconds: !input grace_seconds
 
 triggers:
   - trigger: state
@@ -79,18 +64,12 @@ triggers:
     id: virtual
   - trigger: state
     entity_id: !input device_a
-    from:
-      - "on"
-      - "off"
     to:
       - "on"
       - "off"
     id: device_a
   - trigger: state
     entity_id: !input device_b
-    from:
-      - "on"
-      - "off"
     to:
       - "on"
       - "off"
@@ -153,13 +132,15 @@ actions:
             value_template: "{{ states(trigger.entity_id) == trigger.to_state.state }}"
           - condition: template
             value_template: >-
-              {% set virtual = states(virtual_switch) %}
+              {% set virtual = states[virtual_switch] %}
               {% set reported = trigger.to_state.state %}
-              {% set automation_caused = trigger.to_state.context.parent_id is not none and trigger.to_state.context.user_id is none %}
-              {% set age = (now() - states[virtual_switch].last_changed).total_seconds() %}
+              {% set was_offline = trigger.from_state.state in ['unavailable', 'unknown'] %}
+              {% set intent_before_disconnect =
+                 not was_offline
+                 or as_timestamp(virtual.last_changed) < as_timestamp(trigger.from_state.last_changed) %}
               {{ reported in ['on', 'off']
                  and reported != virtual
-                 and (automation_caused or age >= grace_seconds) }}
+                 and intent_before_disconnect }}
           - if:
               - condition: template
                 value_template: "{{ trigger.to_state.state == 'on' }}"

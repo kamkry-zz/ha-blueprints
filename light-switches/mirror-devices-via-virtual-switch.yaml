@@ -40,20 +40,23 @@ blueprint:
       name: Settle time (seconds)
       description: >-
         How long a device state must remain stable before it is accepted as a
-        change. Debounces flapping devices.
-      default: 3
+        change. Debounces flapping devices. Keep small (0.5 s) for responsive
+        physical control.
+      default: 0.5
       selector:
         number:
           min: 0
-          max: 60
-          step: 1
+          max: 10
+          step: 0.5
           unit_of_measurement: seconds
     grace_seconds:
       name: Stale-report grace (seconds)
       description: >-
         Ignore reports that contradict the virtual switch within this many seconds
-        after the virtual switch last changed. Set 0 to disable.
-      default: 5
+        after the virtual switch last changed. Default 0 disables the guard:
+        LocalTuya does not set state optimistically, so command echoes do not
+        produce state changes and the guard only delays legitimate presses.
+      default: 0
       selector:
         number:
           min: 0
